@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Talent Crafters Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%2310221e' width='32' height='32' rx='6'/%3E%3Cpath fill='%23e0b15a' d='M8 8h6.2v2.2H10.4V24H8V8zm9.2 0H24v2.2h-4.6V14h4v2.1h-4V24h-2.2V8z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,650&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=11">
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <img class="brand-logo" src="/static/logo.jpg" alt="Talent Crafters. Connecting Potential with Opportunity.">
+    </div>
+    <nav>
+      <button type="button" data-tab="overview" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"></path></svg>Dashboard</button>
+      <button type="button" data-tab="companies"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1"></path><circle cx="10" cy="8" r="3"></circle><path d="M20 19v-1a3 3 0 0 0-2.2-2.9"></path><path d="M16.5 5.2a3 3 0 0 1 0 5.6"></path></svg>Companies <span id="count-companies" class="nav-count"></span></button>
+      <button type="button" data-tab="proposals"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"></rect><path d="M9 8h6M9 12h6M9 16h4"></path></svg>Proposals <span id="count-proposals" class="nav-count"></span></button>
+      <button type="button" data-tab="inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h5l2 3h4l2-3h5"></path><path d="M5 12 7 5h10l2 7v7H5z"></path></svg>Inbox <span id="count-inbox" class="nav-count"></span></button>
+      <button type="button" data-tab="agent"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8 5.6 18.4"></path></svg>Agent</button>
+    </nav>
+    <div class="side-stats" id="side-stats">
+      <button type="button" data-stat="companies" data-value="all"><span>Hiring companies</span><b id="stat-companies">0</b></button>
+      <button type="button" data-stat="companies" data-value="local"><span>Local roles</span><b id="stat-local">0</b></button>
+      <button type="button" data-stat="companies" data-value="international"><span>International roles</span><b id="stat-international">0</b></button>
+      <button type="button" data-stat="companies" data-value="contacts"><span>Contacts found</span><b id="stat-contacts">0</b></button>
+      <button type="button" data-stat="proposals" data-value="sent"><span>Proposals sent</span><b id="stat-sent">0</b></button>
+      <button type="button" data-stat="proposals" data-value="queued"><span>Queued</span><b id="stat-queued">0</b></button>
+    </div>
+    <div class="aside-user">
+      <div class="avatar" aria-hidden="true">TC</div>
+      <div>
+        <b>hr@talentcrafters.co.za</b>
+        <span>Recruitment</span>
+      </div>
+    </div>
+    <p class="aside-foot">+27 74 650 2580</p>
+  </aside>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">Talent Crafters Recruitment</p>
+        <h1 id="title">Dashboard</h1>
+        <p id="lede">Emails sent today, this week, and this month, plus the companies the agent has found.</p>
+      </div>
+      <div class="header-actions">
+        <span id="pill" class="pill wait">Starting</span>
+        <button type="button" id="pause" class="ghost">Pause agent</button>
+      </div>
+    </header>
+    <section id="panel"></section>
+  </main>
+  <script src="/static/app.js?v=15"></script>
+</body>
+</html>
