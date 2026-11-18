@@ -65,6 +65,39 @@ SKIP_COMPANIES = {
 }
 
 
+JUNK_HOST_PARTS = (
+    "schema.org",
+    "w3.org",
+    "example.com",
+    "workable.com",
+    "remoteok.com",
+    "remotive.com",
+    "arbeitnow.com",
+    "jobicy.com",
+    "googlesyndication.",
+    "doubleclick.",
+    "googleadservices.",
+    "googletagmanager.",
+    "google-analytics.",
+    "gstatic.",
+    "googleapis.",
+    "pagead",
+    "toptal.com",
+    "wdfl.co",
+    "bit.ly",
+    "tinyurl.",
+    "facebook.com",
+    "linkedin.",
+    "instagram.",
+    "twitter.",
+    "youtube.",
+    "youtu.be",
+    "sentry.io",
+    "hotjar.",
+    "cloudflare.com",
+)
+
+
 def clean_site(url: str) -> str:
     url = (url or "").strip()
     if not url:
@@ -77,19 +110,9 @@ def clean_site(url: str) -> str:
         host = (urlparse(url).hostname or "").lower()
     except ValueError:
         return ""
-    blocked = (
-        "schema.org",
-        "w3.org",
-        "workable.com",
-        "example.com",
-        "remoteok.com",
-        "remotive.com",
-        "arbeitnow.com",
-        "jobicy.com",
-    )
-    if not host or any(part in host for part in blocked):
+    if not host or any(part in host for part in JUNK_HOST_PARTS):
         return ""
-    return url.split("#")[0][:300]
+    return f"https://{host}"
 
 
 def _keep_links(raw: str) -> str:

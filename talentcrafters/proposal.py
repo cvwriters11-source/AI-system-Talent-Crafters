@@ -46,11 +46,9 @@ def compose(
     reference = f"{title} – {place}" if place else title
     address = (postal_address or "").strip() or "Leeuwpoort Street & Kaap St, CBD, Boksburg, 1460"
     subject = _subject(title, place)
-    unsub = 'To stop these emails, reply with the subject "unsubscribe".'
-    if unsub_url:
-        unsub += f"\nOr use this link: {unsub_url}"
+    whatsapp = "https://wa.me/27746502580"
     # The approved letter uses the company and the role. These stay available for later wording.
-    _ = (market, extra_roles, contact_name, advantages)
+    _ = (market, extra_roles, contact_name, advantages, unsub_url)
 
     body_text = f"""Dear {company},
 
@@ -113,18 +111,12 @@ Kind regards,
 Talent Crafters Solutions
 
 Email: {FROM_EMAIL}
-Tel/WhatsApp: {PHONE}
+WhatsApp: {PHONE}
+{whatsapp}
 
 {address}
-
-You are receiving this because {company} has a role open and we are offering to recruit for it.
-{unsub}
 """
 
-    link_html = ""
-    if unsub_url:
-        safe = html.escape(unsub_url, quote=True)
-        link_html = f'<br><a href="{safe}" style="color:#0d2240;">Unsubscribe</a>'
     address_html = "<br>".join(html.escape(line) for line in address.splitlines())
     heading = "margin:22px 0 8px;font-family:Georgia,serif;font-size:15px;letter-spacing:0.06em;color:#0d2240;"
     item = "margin:0 0 6px;"
@@ -181,21 +173,98 @@ You are receiving this because {company} has a role open and we are offering to 
 <p style="margin:0 0 12px;">If you are open to considering an additional recruitment partner, simply reply to this email and we will gladly share our company profile and recruitment proposal for your review.</p>
 <p style="margin:0 0 12px;">{html.escape(DIRECTOR)}, {html.escape(DIRECTOR_TITLE)}, will be your primary point of contact.</p>
 <p style="margin:0 0 16px;">We look forward to the possibility of working with {html.escape(company)}.</p>
-<p style="margin:0 0 12px;">Kind regards,</p>
-<p style="margin:0;font-family:Georgia,serif;font-size:18px;color:#0d2240;">{html.escape(DIRECTOR)}</p>
-<p style="margin:2px 0 0;color:#5c6570;">{html.escape(DIRECTOR_TITLE)}<br>Talent Crafters Solutions</p>
-<p style="margin:8px 0 0;">Email: <a href="mailto:{FROM_EMAIL}" style="color:#0d2240;">{FROM_EMAIL}</a><br>Tel/WhatsApp: {html.escape(PHONE)}</p>
+<p style="margin:0 0 4px;">Kind regards,</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border-top:2px solid #0d2240;">
+<tr><td style="padding:16px 0 0;">
+<p style="margin:0;font-family:Georgia,serif;font-size:20px;color:#0d2240;">{html.escape(DIRECTOR)}</p>
+<p style="margin:3px 0 0;font-size:14px;letter-spacing:0.04em;color:#8a6a2f;">{html.escape(DIRECTOR_TITLE)}</p>
+<p style="margin:2px 0 0;font-size:15px;color:#0d2240;">Talent Crafters Solutions</p>
+<p style="margin:12px 0 0;font-size:14px;line-height:1.5;color:#1c2433;">Email: <a href="mailto:{FROM_EMAIL}" style="color:#0d2240;text-decoration:none;">{FROM_EMAIL}</a><br>{address_html}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 0;">
+<tr><td bgcolor="#128C7E" style="border-radius:6px;background:#128C7E;">
+<a href="{whatsapp}" style="display:inline-block;padding:12px 20px;font-family:Calibri,sans-serif;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">WhatsApp {html.escape(PHONE)}</a>
 </td></tr>
-<tr><td style="padding:0 28px 22px;font-family:Calibri,sans-serif;font-size:12px;line-height:1.5;color:#5c6570;">
-{address_html}<br><br>
-You are receiving this because {html.escape(company)} has a role open and we are offering to recruit for it.<br>
-To stop these emails, reply with the subject &quot;unsubscribe&quot;.{link_html}
+</table>
+</td></tr>
+</table>
 </td></tr>
 </table>
 </td></tr>
 </table>
 </body></html>"""
     return subject, body_text, body_html
+
+
+def follow_up(*, company: str, subject: str, postal_address: str, attempt: int) -> tuple[str, str, str]:
+    """A short note when a company has not answered the proposal."""
+    company = (company or "there").strip()
+    address = (postal_address or "").strip() or "Leeuwpoort Street & Kaap St, CBD, Boksburg, 1460"
+    whatsapp = "https://wa.me/27746502580"
+    original = (subject or "our recruitment proposal").strip()
+    follow_subject = f"Following up: {original}"
+    if len(follow_subject) > 110:
+        follow_subject = follow_subject[:109].rstrip() + "…"
+    closing = (
+        "This is my last note unless I hear from you."
+        if attempt >= 3
+        else "I would be glad to hear from you."
+    )
+    body_text = f"""Dear {company},
+
+I am following up on the note we sent about recruiting for you. We have not received a reply.
+
+If you are open to Talent Crafters Solutions helping with the role, reply to this email and we will share our company profile at a time that suits you.
+
+{DIRECTOR}, {DIRECTOR_TITLE}, remains your point of contact. {closing}
+
+Kind regards,
+
+{DIRECTOR}
+{DIRECTOR_TITLE}
+Talent Crafters Solutions
+
+Email: {FROM_EMAIL}
+WhatsApp: {PHONE}
+{whatsapp}
+
+{address}
+"""
+    address_html = "<br>".join(html.escape(line) for line in address.splitlines())
+    body_html = f"""<!doctype html>
+<html><body style="margin:0;padding:0;background:#f4f1ea;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1ea;padding:28px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border:1px solid #e4dcc8;">
+<tr><td style="background:#0d2240;padding:22px 28px 18px;" align="center">
+<img src="/static/logo.jpg" alt="Talent Crafters" width="320" style="display:block;width:320px;max-width:100%;height:auto;background:#ffffff;border-radius:6px;">
+<p style="margin:12px 0 0;font-family:Georgia,serif;font-size:13px;letter-spacing:0.08em;color:#e0c27a;">{html.escape(TAGLINE)}</p>
+</td></tr>
+<tr><td style="padding:8px 28px 24px;font-family:Calibri,sans-serif;font-size:16px;line-height:1.55;color:#1c2433;">
+<p style="margin:18px 0 8px;">Dear {html.escape(company)},</p>
+<p style="margin:0 0 14px;font-family:Georgia,serif;font-size:18px;color:#0d2240;">{html.escape(follow_subject)}</p>
+<p style="margin:0 0 12px;">I am following up on the note we sent about recruiting for you. We have not received a reply.</p>
+<p style="margin:0 0 12px;">If you are open to Talent Crafters Solutions helping with the role, reply to this email and we will share our company profile at a time that suits you.</p>
+<p style="margin:0 0 16px;">{html.escape(DIRECTOR)}, {html.escape(DIRECTOR_TITLE)}, remains your point of contact. {html.escape(closing)}</p>
+<p style="margin:0 0 4px;">Kind regards,</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border-top:2px solid #0d2240;">
+<tr><td style="padding:16px 0 0;">
+<p style="margin:0;font-family:Georgia,serif;font-size:20px;color:#0d2240;">{html.escape(DIRECTOR)}</p>
+<p style="margin:3px 0 0;font-size:14px;letter-spacing:0.04em;color:#8a6a2f;">{html.escape(DIRECTOR_TITLE)}</p>
+<p style="margin:2px 0 0;font-size:15px;color:#0d2240;">Talent Crafters Solutions</p>
+<p style="margin:12px 0 0;font-size:14px;line-height:1.5;color:#1c2433;">Email: <a href="mailto:{FROM_EMAIL}" style="color:#0d2240;text-decoration:none;">{FROM_EMAIL}</a><br>{address_html}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 0;">
+<tr><td bgcolor="#128C7E" style="border-radius:6px;background:#128C7E;">
+<a href="{whatsapp}" style="display:inline-block;padding:12px 20px;font-family:Calibri,sans-serif;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">WhatsApp {html.escape(PHONE)}</a>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>"""
+    return follow_subject, body_text, body_html
 
 
 def render_plain(body_text: str) -> str:

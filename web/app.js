@@ -3,7 +3,7 @@ const TITLES = {
   companies: ["Companies", "Open roles the agent has found, with the decision-maker address when one was published."],
   proposals: ["Proposals", "Letters written in the voice of Talent Crafters, ready to leave from hr@talentcrafters.co.za."],
   inbox: ["Inbox", "Mail that has arrived at hr@talentcrafters.co.za. Open one and reply from here."],
-  agent: ["Agent", "The search runs on its own. Connect the mailbox once and proposals go out at any hour."],
+  agent: ["Agent", "The search runs on its own. Letters wait in the queue and go out at 16:00 SAST."],
 };
 
 const panel = document.getElementById("panel");
@@ -176,7 +176,7 @@ function fillProposals() {
   const visible = data.outreach.filter((item) => proposalFilter === "all" || item.status === proposalFilter);
   const filterLabel = {
     all: "All letters",
-    queued: "Queued. These leave on their own.",
+    queued: "Queued. These go out at 16:00 SAST.",
     sent: "Sent proposals",
   }[proposalFilter] || "All letters";
   if (!visible.length) {
@@ -292,7 +292,7 @@ function companiesShell() {
     <div id="company-table"></div>
     <form id="add-contact" class="card add-box" hidden>
       <h2 id="add-company-name">Add a decision maker</h2>
-      <p class="note">Use an address you already have. The agent writes the proposal and sends it on the next open window.</p>
+      <p class="note">Use an address you already have. The agent writes the proposal and sends it at 16:00 SAST.</p>
       <input type="hidden" id="add-company-id">
       <div class="form-grid">
         <label class="field"><span>Name</span><input id="add-name" type="text"></label>

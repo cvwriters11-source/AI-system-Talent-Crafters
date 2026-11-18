@@ -14,22 +14,31 @@ from talentcrafters.contacts import find_public_contacts, hunter_contacts, unsui
 from talentcrafters.db import FROM_EMAIL, db, get_settings, log, now_iso, set_settings
 from talentcrafters.discover import clean_site, collect, name_key
 from talentcrafters.mailer import TRACK_EMAIL, MailboxError, deliver, notify_tracker, poll_replies
-from talentcrafters.proposal import compose
+from talentcrafters.proposal import compose, follow_up
 
 SAST = timezone(timedelta(hours=2))
 _DISCOVERY_EVERY = 20 * 60
 _LOOP_EVERY = 180
 _SENDS_PER_CYCLE = 15
-_CONTACT_BATCH = 4
+_CONTACT_BATCH = 6
+_SEND_HOUR = 16
+_FOLLOW_DAYS = 4
+_FOLLOW_LIMIT = 3
 
 
 def in_send_window(moment: datetime | None = None) -> bool:
-    """Proposals leave at any hour. Companies read them when they open their mail."""
-    return True
+    """Queued letters go out from 16:00 South African time."""
+    if moment is None:
+        moment = datetime.now(SAST)
+    elif moment.tzinfo is None:
+        moment = moment.replace(tzinfo=SAST)
+    else:
+        moment = moment.astimezone(SAST)
+    return moment.hour >= _SEND_HOUR
 
 
 def window_label(moment: datetime | None = None) -> str:
-    return "Proposals go out at any hour. Companies read them when they open their mail."
+    return "The search keeps going. Queued letters go out at 16:00 SAST."
 
 
 def _suppressed(conn, email: str) -> bool:
@@ -218,13 +227,38 @@ def redraft_queued() -> int:
         return count
 
 
+def _due_follow_ups(conn, limit: int = _SENDS_PER_CYCLE) -> list[dict]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=_FOLLOW_DAYS)).replace(microsecond=0).isoformat()
+    rows = conn.execute(
+        """
+        SELECT o.*, c.name AS company_name
+        FROM outreach o
+        JOIN companies c ON c.id = o.company_id
+        WHERE o.status='sent'
+          AND COALESCE(o.follow_ups, 0) < ?
+          AND (
+            (COALESCE(o.follow_ups, 0)=0 AND o.sent_at IS NOT NULL AND o.sent_at<=?)
+            OR (COALESCE(o.follow_ups, 0)>0 AND o.followed_at IS NOT NULL AND o.followed_at<=?)
+          )
+        ORDER BY o.sent_at
+        LIMIT ?
+        """,
+        (_FOLLOW_LIMIT, cutoff, cutoff, limit),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def _sent_since(conn, start: datetime) -> int:
     start_utc = start.astimezone(timezone.utc).replace(microsecond=0).isoformat()
-    row = conn.execute(
+    sent = conn.execute(
         "SELECT COUNT(*) AS n FROM outreach WHERE status='sent' AND sent_at>=?",
         (start_utc,),
     ).fetchone()
-    return int(row["n"])
+    followed = conn.execute(
+        "SELECT COUNT(*) AS n FROM outreach WHERE followed_at>=?",
+        (start_utc,),
+    ).fetchone()
+    return int(sent["n"]) + int(followed["n"])
 
 
 def _sent_today(conn) -> int:
@@ -360,6 +394,8 @@ class Controller:
             summary_bits.append(
                 f"{drafted} proposal{'' if drafted == 1 else 's'} written"
             )
+        if not in_send_window() and not block:
+            summary_bits.append("letters stay queued until 16:00 SAST")
         if sent:
             summary_bits.append(f"{sent} sent from {FROM_EMAIL}")
         if replies:
@@ -510,6 +546,57 @@ class Controller:
                         log(conn, "info", f"Reply received from {email}. No further proposal will go there.")
         return changed
 
+    def _send_follow_ups(self) -> int:
+        with db() as conn:
+            settings = get_settings(conn)
+            due = _due_follow_ups(conn)
+        sent = 0
+        for item in due:
+            with db() as conn:
+                if _suppressed(conn, item["to_email"]) or unsuitable_address(item["to_email"]):
+                    conn.execute(
+                        "UPDATE outreach SET follow_ups=? WHERE id=?",
+                        (_FOLLOW_LIMIT, item["id"]),
+                    )
+                    continue
+                settings = get_settings(conn)
+            attempt = int(item.get("follow_ups") or 0) + 1
+            subject, body_text, body_html = follow_up(
+                company=item.get("company_name") or "",
+                subject=item.get("subject") or "",
+                postal_address=settings.get("postal_address") or "",
+                attempt=attempt,
+            )
+            try:
+                deliver(
+                    settings,
+                    item["to_email"],
+                    subject,
+                    body_text,
+                    body_html,
+                    _unsub_url(settings, item["unsub_token"]),
+                )
+            except MailboxError as exc:
+                with db() as conn:
+                    log(conn, "error", f"Follow-up to {item['to_email']} failed: {exc}")
+                if "rejected that login" in str(exc):
+                    break
+                continue
+            with db() as conn:
+                conn.execute(
+                    "UPDATE outreach SET follow_ups=?, followed_at=?, error='' WHERE id=?",
+                    (attempt, now_iso(), item["id"]),
+                )
+                log(conn, "sent", f"Follow-up {attempt} sent to {item['to_email']} from {FROM_EMAIL}.")
+            self._note_tracker(
+                settings,
+                item.get("company_name") or "",
+                {"to_email": item["to_email"], "subject": subject, "body_text": body_text},
+            )
+            sent += 1
+            time.sleep(20)
+        return sent
+
     def _send_ready(self) -> tuple[int, int, str]:
         with db() as conn:
             settings = get_settings(conn)
@@ -521,6 +608,13 @@ class Controller:
                     self._last_block = reason
                 return 0, 0, reason
             self._last_block = ""
+            if not in_send_window():
+                return 0, 0, ""
+            today = datetime.now(SAST).date().isoformat()
+            if settings.get("last_send_day") == today and settings.get("batch_open") != "1":
+                return 0, 0, ""
+            if settings.get("last_send_day") != today:
+                set_settings(conn, {"last_send_day": today, "batch_open": "1"})
             queued = conn.execute(
                 "SELECT * FROM outreach WHERE status='queued' ORDER BY id ASC LIMIT ?",
                 (_SENDS_PER_CYCLE,),
@@ -595,6 +689,14 @@ class Controller:
             self._note_tracker(settings, company_name, payload)
             sent += 1
             time.sleep(20)
+
+        followed = self._send_follow_ups()
+        sent += followed
+        with db() as conn:
+            waiting = conn.execute("SELECT COUNT(*) AS n FROM outreach WHERE status='queued'").fetchone()["n"]
+            due = _due_follow_ups(conn)
+            if waiting == 0 and not due:
+                set_settings(conn, {"batch_open": "0"})
         return sent, failed, ""
 
     def send_one(self, outreach_id: int) -> None:

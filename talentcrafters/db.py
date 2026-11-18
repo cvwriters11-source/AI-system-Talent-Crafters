@@ -171,7 +171,14 @@ def init_db() -> None:
         )
         conn.execute(
             "UPDATE companies SET website='' "
-            "WHERE lower(website) LIKE '%schema.org%' OR lower(website) LIKE '%w3.org%'"
+            "WHERE lower(website) LIKE '%schema.org%' OR lower(website) LIKE '%w3.org%' "
+            "OR lower(website) LIKE '%googlesyndication%' OR lower(website) LIKE '%doubleclick%' "
+            "OR lower(website) LIKE '%googleadservices%' OR lower(website) LIKE '%wdfl.co%' "
+            "OR lower(website) LIKE '%toptal.com%'"
+        )
+        conn.execute(
+            "UPDATE companies SET contact_checked_at=NULL "
+            "WHERE NOT EXISTS (SELECT 1 FROM contacts ct WHERE ct.company_id=companies.id)"
         )
         conn.execute(
             "DELETE FROM contacts WHERE instr(lower(email), 'u003e') > 0 "
@@ -184,6 +191,10 @@ def init_db() -> None:
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(outreach)")}
         if "edited" not in columns:
             conn.execute("ALTER TABLE outreach ADD COLUMN edited INTEGER NOT NULL DEFAULT 0")
+        if "follow_ups" not in columns:
+            conn.execute("ALTER TABLE outreach ADD COLUMN follow_ups INTEGER NOT NULL DEFAULT 0")
+        if "followed_at" not in columns:
+            conn.execute("ALTER TABLE outreach ADD COLUMN followed_at TEXT")
 
 
 def get_settings(conn: sqlite3.Connection) -> dict[str, str]:

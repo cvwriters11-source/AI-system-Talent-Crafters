@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from talentcrafters.discover import HEADERS, html_to_text
+from talentcrafters.discover import HEADERS, JUNK_HOST_PARTS, html_to_text
 
 EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
 URL_RE = re.compile(r"https?://[^\s<>\"']+", re.I)
@@ -25,6 +25,15 @@ SKIP_LOCAL = {
     "security",
     "errors",
     "error",
+    "complaints",
+    "complaint",
+    "feedback",
+    "newsletter",
+    "newsletters",
+    "notifications",
+    "notify",
+    "alerts",
+    "alert",
 }
 GENERIC = {
     "info",
@@ -176,8 +185,37 @@ def classify_email(email: str) -> str:
     return "named"
 
 
+def _published_extras(raw: str) -> str:
+    """Addresses written as words, hidden by Cloudflare, or listed in the page data."""
+    text = raw or ""
+    text = re.sub(r"(?i)\s*(?:\[at\]|\(at\)|\{at\})\s*", "@", text)
+    text = re.sub(r"(?i)\s*(?:\[dot\]|\(dot\)|\{dot\})\s*", ".", text)
+    hidden = []
+    for code in re.findall(r"""data-cfemail=["']([0-9a-fA-F]+)["']""", text):
+        try:
+            data = bytes.fromhex(code)
+        except ValueError:
+            continue
+        if len(data) < 2:
+            continue
+        key = data[0]
+        address = bytes(byte ^ key for byte in data[1:]).decode("utf-8", "ignore")
+        if "@" in address:
+            hidden.append(address)
+    for block in re.findall(
+        r"""(?is)<script[^>]*type=["']application/ld\+json["'][^>]*>(.*?)</script>""",
+        text,
+    ):
+        hidden.extend(
+            re.findall(r"""(?i)"(?:email|applicationEmail)"\s*:\s*"([^"\\]+@[^"\\]+)""", block)
+        )
+    if hidden:
+        text = f"{text}\n{' '.join(hidden)}"
+    return text
+
+
 def extract_emails(*chunks: str) -> list[str]:
-    blob = "\n".join(chunk or "" for chunk in chunks)
+    blob = _published_extras("\n".join(chunk or "" for chunk in chunks))
     found = EMAIL_RE.findall(blob)
     found += re.findall(r"mailto:([^?\"'>\s]+)", blob, flags=re.I)
     unique: list[str] = []
@@ -203,6 +241,8 @@ def _usable(email: str) -> bool:
         return False
     if domain in SKIP_DOMAINS or domain.endswith(".talentcrafters.co.za"):
         return False
+    if any(part in domain for part in JUNK_HOST_PARTS):
+        return False
     parts = domain.split(".")
     if any(part in {"png", "jpg", "jpeg", "gif", "svg", "webp", "css", "js"} for part in parts):
         return False
@@ -218,7 +258,7 @@ def guess_website(*chunks: str) -> str:
             except ValueError:
                 continue
             host = (parsed.hostname or "").lower()
-            if not host or any(part in host for part in SKIP_HOST_PARTS):
+            if not host or any(part in host for part in SKIP_HOST_PARTS) or any(part in host for part in JUNK_HOST_PARTS):
                 continue
             if host.replace(".", "").isdigit():
                 continue
@@ -282,8 +322,8 @@ def _best(contacts: list[dict]) -> list[dict]:
         deduped.values(),
         key=lambda item: (
             item["auto_send"],
-            item["kind"] == "named",
             item["kind"] == "recruiting_inbox",
+            item["kind"] == "named",
         ),
         reverse=True,
     )
@@ -307,38 +347,53 @@ def _page_text(client: httpx.Client, url: str) -> str:
     return response.text[:400_000]
 
 
+def _company_site_from_page(raw: str, page_url: str) -> str:
+    page_host = (urlparse(page_url).hostname or "").lower()
+    for href in re.findall(r"""href=["'](https?://[^"'#]+)""", raw or "", flags=re.I):
+        site = guess_website(href)
+        if not site:
+            continue
+        host = (urlparse(site).hostname or "").lower()
+        if page_host and (host == page_host or host.endswith("." + page_host) or page_host.endswith("." + host)):
+            continue
+        return site
+    return ""
+
+
 def find_public_contacts(
     client: httpx.Client, website: str, roles: list[dict]
 ) -> tuple[str, list[dict]]:
-    """Return a website and at most one published contact."""
+    """Return a real company site and at most one address published on it or the job advert."""
     blobs = [role.get("description") or "" for role in roles]
-    urls = [role.get("url") or "" for role in roles]
+    urls = [role.get("url") or "" for role in roles if (role.get("url") or "").startswith("http")]
     found = harvest("\n".join(blobs), "job_post")
-    site = website or guess_website(*blobs, *urls)
-    best = _best(found)
-    if best and best[0]["auto_send"]:
-        return site, best
+    site = guess_website(website) or guess_website(*blobs, *urls)
 
-    for url in urls[:1]:
-        if not url.startswith("http"):
-            continue
+    def ready():
+        best = _best(found)
+        return best if best and best[0]["auto_send"] else None
+
+    if ready():
+        return site, ready()
+
+    for url in urls[:2]:
         page = _page_text(client, url)
-        if page:
-            found.extend(harvest(page, "job_post"))
-            site = site or guess_website(page)
-            best = _best(found)
-            if best and best[0]["auto_send"]:
-                return site, best
+        if not page:
+            continue
+        found.extend(harvest(page, "job_post"))
+        site = site or guess_website(page) or _company_site_from_page(page, url)
+        if ready():
+            return site, ready()
 
     if site:
-        for path in ("", "/contact", "/contact-us", "/careers"):
-            page = _page_text(client, site.rstrip("/") + path)
+        root = site.rstrip("/")
+        for path in ("", "/contact", "/contact-us", "/about", "/about-us", "/careers"):
+            page = _page_text(client, root + path)
             if not page:
                 continue
             found.extend(harvest(page, "company_site"))
-            best = _best(found)
-            if best and best[0]["auto_send"]:
-                return site, best
+            if ready():
+                return site, ready()
     return site, _best(found)
 
 
