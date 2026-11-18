@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -49,6 +50,9 @@ WEB = Path(__file__).resolve().parent / "web"
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    if os.environ.get("VERCEL"):
+        yield
+        return
     with db() as conn:
         log(conn, "info", "Agent started. Searching for companies hiring in South Africa and internationally.")
     controller.start()

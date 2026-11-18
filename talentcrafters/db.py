@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -9,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data"
+DATA = Path("/tmp/talent-crafters") if os.environ.get("VERCEL") else ROOT / "data"
 DB_PATH = DATA / "outreach.db"
 
 FROM_EMAIL = "hr@talentcrafters.co.za"
